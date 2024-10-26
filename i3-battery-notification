@@ -1,0 +1,98 @@
+#!/usr/bin/python3
+import os
+import argparse
+import sys
+import time
+
+# TO DO: verbose
+parser = argparse.ArgumentParser(description="teste")
+parser.add_argument("-l", type=int, default=20, help="Low Percentage: Below this value, it will notify low battery. Default 20.")
+parser.add_argument("-m", type=int, default=95, help="Full Percentage: Above this value, it will notify full charge. Default 95.")
+parser.add_argument("-i", type=int, default=5, help="Interval: Time between each notification, in minutes. Default 5.")
+parser.add_argument("-d", action="store_true", help="Debug mode")
+parser.add_argument("-c", type=str, default="/sys/class/power_supply/BAT0/capacity", help="Sets the file containing battery capacity level. Default is /sys/class/power_supply/BAT0/capacity")
+parser.add_argument("-s", type=str, default="/sys/class/power_supply/BAT0/status", help="Sets the file containing battery status (Charging, Discharging, etc.). Default is /sys/class/power_supply/BAT0/status")
+parser.add_argument("-n", action="store_true", help="Enables notify-send instead of i3-nagbar popup")
+
+args = parser.parse_args()
+
+def debug(log):
+    if args.d:
+        print(log);
+
+def get_battery_capacity ():
+    path = args.c
+    try:
+        accessPath = os.open(path, os.O_RDONLY)
+        readPath = os.read(accessPath, 20).decode('utf-8').strip()
+        os.close(accessPath)
+        return int(readPath)
+    except FileNotFoundError:
+        debug("Battery capacity information not found.")
+        sys.exit(0)
+
+def get_battery_status():
+    path = args.s
+    try:
+        accessPath = os.open(path, os.O_RDONLY)
+        readPath = os.read(accessPath, 20).decode('utf-8').strip()
+        os.close(accessPath)
+        return readPath
+    except FileNotFoundError:
+        debug("Battery status information not found.")
+        sys.exit(0)
+
+def is_battery_charging():
+    if get_battery_status() == 'Charging':
+        return True
+
+def is_battery_discharging():
+    if get_battery_status() == 'Discharging':
+        return True
+
+def nagbar_opt(_type, message):
+    try:
+        os.system(f"i3-nagbar -m '{message}' -t {_type}")
+    except Exception as e:
+        print(f"An error ocurred: {e}. Maybe i3 is not installed or broken?")
+
+def notify_send_opt(criticity, message):
+    os.system(f'notify-send -u {criticity} "Battery status" "{message}"')
+
+def main():
+    lowLimit = args.l
+    fullLimit = args.m
+    sleepInterval = args.i
+    batteryStatus = get_battery_status()
+    batteryLevel = get_battery_capacity()
+    capacityPath = args.c
+    notifySendOpt = args.n
+    statusPath = args.s
+    lowMessage = "Battery is getting low!"
+    fullMessage = "Battery is fully charged!"
+    debug(f"Low Limit: {lowLimit}%; Full Limit: {fullLimit}%, Interval: {sleepInterval} mins")
+    debug(f"Current battery status path is {statusPath}")
+    debug(f"Current battery capacity path is {capacityPath}")
+    debug(f"Battery level is {batteryLevel}%")
+    debug(f"Battery status is {batteryStatus}")
+    try:
+        while True:
+            if is_battery_discharging():
+                if get_battery_capacity() <= lowLimit:
+                    if notifySendOpt:
+                        notify_send_opt(criticity="critical", message=lowMessage)
+                    else:
+                        nagbar_opt(_type="error", message=lowMessage)
+            elif is_battery_charging():
+                if get_battery_capacity() >= fullLimit:
+                    if notifySendOpt:
+                        notify_send_opt(message=fullMessage)
+                    else:
+                        nagbar_opt(_type="warning", message=fullMessage)
+            time.sleep(sleepInterval * 60)
+    except KeyboardInterrupt:
+        debug("Script interrupted. Exiting...")
+        sys.exit(0)
+
+if __name__ == "__main__":
+    main()
