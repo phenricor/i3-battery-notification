@@ -86,7 +86,7 @@ def main():
             elif is_battery_charging():
                 if get_battery_capacity() >= fullLimit:
                     if notifySendOpt:
-                        notify_send_opt(message=fullMessage)
+                        notify_send_opt(criticity="normal", message=fullMessage)
                     else:
                         nagbar_opt(_type="warning", message=fullMessage)
             time.sleep(sleepInterval * 60)
